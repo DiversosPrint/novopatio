@@ -7119,7 +7119,7 @@ tbody.innerHTML = allConjuntos.slice(0, 50).map(c => `
 <td><small>${c.baseDestino || '—'}</small></td>
 <td><small>${c.leaderName || '—'}</small></td>
 <td><small class="text-muted">${c.notes || '—'}</small><div class="conjunto-hint"><i class="bi bi-link-45deg"></i>Cavalo ${c.cavaloPlate} + Carreta ${c.carretaPlate}</div></td>
-<td><button class="btn btn-sm btn-link" onclick="openEditConjunto(${c.id})"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteConjunto(${c.id})"><i class="bi bi-unlink-45deg me-1"></i>Desmontar</button></td>
+<td><button class="btn btn-sm btn-link" onclick="openEditConjunto(${c.id})"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteConjunto(${c.id})"><i class="bi bi-trash me-1"></i>Excluir</button></td>
 </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted py-3">Nenhum conjunto montado</td></tr>';
 } catch (err) {
 console.error('Erro loadConjuntos:', err);
@@ -7191,7 +7191,7 @@ new bootstrap.Modal(document.getElementById('conjuntoModal')).show();
 }
 
 async function deleteConjunto(id) {
-if (!confirm('Desmontar este conjunto?')) return;
+if (!confirm('Excluir este conjunto? Os veículos voltarão a ficar disponíveis.')) return;
 try {
 const res = await fetch(`${API_URL}/conjuntos/${id}`, { method: 'DELETE' });
 const result = await res.json();
@@ -7201,7 +7201,7 @@ return;
 }
 await loadConjuntos();
 await Promise.all([loadStats(), loadVehicles()]);
-showToast('Conjunto desmontado!', 'info');
+showToast('Conjunto excluído!', 'info');
 } catch (err) {
 console.error('Erro ao desmontar conjunto:', err);
 showToast('Erro ao desmontar conjunto', 'danger');

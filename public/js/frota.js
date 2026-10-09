@@ -877,7 +877,7 @@ function renderFrotaConjuntoCard(conjunto, cavalo, carreta) {
           ${deliveryAction}
           ${undoDeliveryAction}
           ${canManagePreparation() ? '<button type="button" class="prep-icon-action prep-edit-conjunto-vehicles" title="Editar veículos"><i class="bi bi-truck"></i></button>' : ''}
-          ${canManagePreparation() ? '<button type="button" class="prep-icon-action danger prep-delete-conjunto" title="Desmontar conjunto"><i class="bi bi-link-45deg"></i></button>' : ''}
+          ${canManagePreparation() ? '<button type="button" class="prep-icon-action danger prep-delete-conjunto" title="Excluir conjunto"><i class="bi bi-trash"></i></button>' : ''}
         </div>
       </div>
     </article>
@@ -1735,11 +1735,11 @@ async function undoFrotaEntrega(type, record) {
 
 async function deleteFrotaConjunto(conjunto) {
   if (!conjunto || !canManagePreparation()) return;
-  if (!window.confirm(`Desmontar o conjunto ${conjunto.cavaloPlate} + ${conjunto.carretaPlate}? Os dois cards voltarão ao painel.`)) return;
+  if (!window.confirm(`Excluir o conjunto ${conjunto.cavaloPlate} + ${conjunto.carretaPlate}? Os dois veículos voltarão ao painel.`)) return;
   await fetchJson(`${FROTA_API}/conjuntos/${conjunto.id}`, { method: 'DELETE' });
   if (String(expandedFrotaConjuntoId) === String(conjunto.id)) expandedFrotaConjuntoId = null;
   await loadFrotaData({ keepSelection: false });
-  showToast('Conjunto desmontado. Os veículos voltaram ao painel.', 'warning');
+  showToast('Conjunto excluído. Os veículos voltaram ao painel.', 'warning');
 }
 
 const FROTA_VOICE_DIGIT_MAP = Object.freeze({
