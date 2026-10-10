@@ -68,7 +68,7 @@ app.use('/api/', limiter);
 function mapPostgresRow(row) {
     if (!row) return null;
     return {
-        id: row.id, plate: row.plate, type: row.type, yard: row.yard, base: row.base,
+        id: row.id, plate: row.plate, type: row.type, brand: row.brand || '', model: row.model || '', yard: row.yard, base: row.base,
         baseDestino: row.basedestino || '',
         manager: row.manager, chassis: row.chassis, status: row.status,
         maintenance: row.maintenance, maintenanceCategory: row.maintenancecategory || '',
@@ -165,6 +165,8 @@ function mapVehicleCatalogRow(row) {
         color: row.color || '',
         axleConfig: row.axleconfig || row.axleConfig || '',
         type: row.type || '',
+        brand: row.brand || '',
+        model: row.model || '',
         operationalStatus: row.operationalstatus || row.operationalStatus || '',
         primaryStatus: row.primarystatus || row.primaryStatus || '',
         insurance: row.insurance || '',
@@ -2260,6 +2262,7 @@ async function initDatabase() {
                     id SERIAL PRIMARY KEY,
                     plate TEXT NOT NULL, type TEXT NOT NULL, yard TEXT NOT NULL,
                     base TEXT DEFAULT 'Jaraguá-SP (Nacional)', baseDestino TEXT DEFAULT '',
+                    brand TEXT DEFAULT '', model TEXT DEFAULT '',
                     manager TEXT DEFAULT '', chassis TEXT DEFAULT '',
                     status TEXT DEFAULT 'Aguardando linha',
                     maintenance BOOLEAN DEFAULT false, maintenanceCategory TEXT DEFAULT '',
@@ -2564,6 +2567,8 @@ async function initDatabase() {
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_createdat ON audit_logs(createdAt DESC);
             `);
             
+            await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS brand TEXT DEFAULT ''`);
+            await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model TEXT DEFAULT ''`);
             await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS manager TEXT DEFAULT ''`);
             await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS chassis TEXT DEFAULT ''`);
             await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS hasAccident BOOLEAN DEFAULT false`);
@@ -2681,6 +2686,7 @@ async function initDatabase() {
             await seedFleetPreparationDefaults();
             await normalizeFleetPreparationLabels();
             await syncProductionVehicleCatalogFromBundledSqlite();
+            await pool.query(`UPDATE vehicles AS v SET brand = COALESCE(NULLIF(v.brand, ''), c.brand, ''), model = COALESCE(NULLIF(v.model, ''), c.model, '') FROM vehicle_catalog AS c WHERE regexp_replace(upper(v.plate), '[^A-Z0-9]', '', 'g') = c.normalizedPlate`);
             await repairVehicleTimelineConsistency();
             console.log('✅ PostgreSQL inicializado');
         } catch (err) { console.error('❌ Erro PostgreSQL:', err.message); }
@@ -2691,6 +2697,7 @@ async function initDatabase() {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     plate TEXT NOT NULL, type TEXT NOT NULL, yard TEXT NOT NULL,
                     base TEXT DEFAULT 'Jaraguá-SP (Nacional)', baseDestino TEXT DEFAULT '',
+                    brand TEXT DEFAULT '', model TEXT DEFAULT '',
                     manager TEXT DEFAULT '', chassis TEXT DEFAULT '',
                     status TEXT DEFAULT 'Aguardando linha',
                     maintenance INTEGER DEFAULT 0, maintenanceCategory TEXT DEFAULT '',
@@ -3009,6 +3016,8 @@ async function initDatabase() {
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehicleTesteDrive INTEGER DEFAULT 0'); } catch(e) {}
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehicleAdesivoCorreios INTEGER DEFAULT 0'); } catch(e) {}
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehicleAdesivoPrint INTEGER DEFAULT 0'); } catch(e) {}
+            try { db.exec("ALTER TABLE vehicles ADD COLUMN brand TEXT DEFAULT ''"); } catch(e) {}
+            try { db.exec("ALTER TABLE vehicles ADD COLUMN model TEXT DEFAULT ''"); } catch(e) {}
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehicleMarcacaoPneus INTEGER DEFAULT 0'); } catch(e) {}
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehiclePlataformaCarga INTEGER DEFAULT 0'); } catch(e) {}
             try { db.exec('ALTER TABLE vehicles ADD COLUMN newVehicleForracaoInterna INTEGER DEFAULT 0'); } catch(e) {}
@@ -3101,6 +3110,7 @@ async function initDatabase() {
                 CREATE INDEX IF NOT EXISTS idx_fleet_preparation_vehicles_plate ON fleet_preparation_vehicles(plate);
                 CREATE INDEX IF NOT EXISTS idx_fleet_preparation_logs_vehicle ON fleet_preparation_logs(vehicleId, createdAt DESC);
             `);
+            try { db.exec("UPDATE vehicles SET brand = COALESCE(NULLIF(brand, ''), (SELECT brand FROM vehicle_catalog WHERE normalizedPlate = replace(replace(upper(vehicles.plate), '-', ''), ' ', '')), ''), model = COALESCE(NULLIF(model, ''), (SELECT model FROM vehicle_catalog WHERE normalizedPlate = replace(replace(upper(vehicles.plate), '-', ''), ' ', '')), '')"); } catch(e) {}
             await seedFleetPreparationDefaults();
             await normalizeFleetPreparationLabels();
             await repairVehicleTimelineConsistency();
@@ -6536,6 +6546,8 @@ app.put('/api/vehicles/:id', requireAuth, async (req, res) => {
     const accidentPhotoPayloads = Array.isArray(updates?.accidentPhotos) ? updates.accidentPhotos : [];
     const normalizedUpdatePlate = updates.plate !== undefined ? normalizePlateValue(updates.plate) : null;
     const normalizedUpdateChassis = updates.chassis !== undefined ? String(updates.chassis || '').trim() : null;
+    const normalizedUpdateBrand = updates.brand !== undefined ? String(updates.brand || '').trim() : null;
+    const normalizedUpdateModel = updates.model !== undefined ? String(updates.model || '').trim() : null;
     const normalizedUpdateYard = updates.yard !== undefined ? canonicalizeSystemYard(updates.yard) : null;
     if (normalizedUpdateYard) {
         const allowedYards = getAllowedYardsForUser(req.session.user);
@@ -6592,6 +6604,12 @@ app.put('/api/vehicles/:id', requireAuth, async (req, res) => {
                 nextReadyTime, nextEntryTime, nextExitTime,
                 isNewVehicle ? 1 : 0, newVehiclePlotagem ? 1 : 0, newVehicleTesteDrive ? 1 : 0, newVehicleAdesivoCorreios ? 1 : 0, newVehicleAdesivoPrint ? 1 : 0, newVehicleMarcacaoPneus ? 1 : 0, newVehiclePlataformaCarga ? 1 : 0, newVehicleForracaoInterna ? 1 : 0, newVehicleNotes, hasNewLine ? 1 : 0, newLineName, newLineState, maintenanceProblem, maintenanceServiceOrder, isReserveVehicle ? 1 : 0,
                 new Date().toISOString(), req.session.user.username, id);
+        }
+        if (normalizedUpdateBrand !== null || normalizedUpdateModel !== null) {
+            const nextBrand = normalizedUpdateBrand !== null ? normalizedUpdateBrand : String(currentVehicle.brand || '');
+            const nextModel = normalizedUpdateModel !== null ? normalizedUpdateModel : String(currentVehicle.model || '');
+            if (isProduction) await pool.query('UPDATE vehicles SET brand = $1, model = $2 WHERE id = $3', [nextBrand, nextModel, id]);
+            else db.prepare('UPDATE vehicles SET brand = ?, model = ? WHERE id = ?').run(nextBrand, nextModel, id);
         }
         const updatedVehicle = isProduction
             ? normalizeVehicleRecord(mapPostgresRow((await pool.query('SELECT * FROM vehicles WHERE id = $1', [id])).rows[0]))

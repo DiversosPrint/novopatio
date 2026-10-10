@@ -1035,8 +1035,8 @@ function renderDetails(vehicle) {
   `;
 }
 
-function renderDetails(vehicle) {
-  const details = document.getElementById('frotaDetails');
+function renderDetails(vehicle, targetId = 'frotaDetails') {
+  const details = document.getElementById(targetId);
   if (!details) return;
   if (!vehicle) {
     details.innerHTML = `
@@ -1059,6 +1059,7 @@ function renderDetails(vehicle) {
   const editable = canEditPreparation();
 
   details.innerHTML = `
+    <div class="px-3 pt-3"><h2 class="h6 mb-0"><i class="bi bi-file-earmark-text me-1"></i>Relatório do veículo</h2></div>
     <div class="p-3 border-bottom d-flex align-items-start justify-content-between gap-3 flex-wrap">
       <div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -1089,6 +1090,14 @@ function renderDetails(vehicle) {
       <ul class="list-group list-group-flush">${logsHtml || '<li class="list-group-item text-muted">Sem historico.</li>'}</ul>
     </div>
   `;
+}
+
+function openVehicleReportModal(vehicle) {
+  if (!vehicle) return;
+  const title = document.getElementById('frotaReportTitle');
+  if (title) title.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i>Ficha do veículo ${escapeHtml(getVehicleDisplayPlate(vehicle) || '')}`;
+  renderDetails(vehicle, 'frotaReportContent');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('frotaReportModal')).show();
 }
 
 function renderChecklistWindow(vehicle) {
@@ -2269,6 +2278,7 @@ function bindEvents() {
       return;
     }
     selectVehicle(vehicleId);
+    openVehicleReportModal(vehicle);
   });
   document.getElementById('frotaChecklistModal').addEventListener('click', event => {
     const editButton = event.target.closest('.frota-modal-edit-vehicle');

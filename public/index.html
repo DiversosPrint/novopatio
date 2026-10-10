@@ -602,6 +602,12 @@ margin-top: 4px;
 .actions-dropdown-menu.show {
 display: block;
 }
+.actions-dropdown.dropup .actions-dropdown-menu {
+top: auto;
+bottom: 100%;
+margin-top: 0;
+margin-bottom: 4px;
+}
 .actions-dropdown-menu .dropdown-item {
 padding: 8px 12px;
 display: flex;
@@ -1682,7 +1688,8 @@ Nenhum veículo com mais de 24h no pátio neste momento.
 <div class="row g-3 align-items-end">
 <div class="col-md-4">
 <label class="form-label small text-muted">Buscar</label>
-<input type="text" class="form-control" id="searchInput" placeholder="Placa, tipo, pátio ou gestor..." onkeyup="handleFilterInputChange()">
+<input type="text" class="form-control" id="searchInput" list="searchPlateSuggestions" placeholder="Placa, tipo, pátio ou gestor..." autocomplete="off" oninput="handleFilterInputChange()">
+<datalist id="searchPlateSuggestions"></datalist>
 </div>
 <div class="col-md-3">
 <label class="form-label small text-muted">Filtrar por Pátio</label>
@@ -1923,25 +1930,7 @@ Nenhum veículo com mais de 24h no pátio neste momento.
 </div>
 <div class="modal-body">
 <div class="row">
-<div class="col-lg-5">
-<div class="card border-0 shadow-sm">
-<div class="card-body text-center">
-<h6 class="card-title mb-3"><i class="bi bi-camera me-2"></i>Escanear Placa</h6>
-<div id="camera-container-entry" class="scan-overlay">
-<video id="camera-video-entry" autoplay playsinline></video>
-</div>
-<div class="d-flex flex-wrap gap-2 w-100 mt-3">
-<button class="btn btn-camera flex-fill" type="button" onclick="startCamera('entry')"><i class="bi bi-camera-video me-2"></i>Iniciar</button>
-<button class="btn btn-outline-secondary flex-fill" type="button" onclick="openPlateImagePicker('entry')"><i class="bi bi-image me-2"></i>Usar Foto</button>
-<button class="btn btn-outline-secondary flex-fill" type="button" onclick="stopCamera('entry')"><i class="bi bi-camera-video-off me-2"></i>Parar</button>
-</div>
-<input type="file" id="plateImageEntry" class="d-none" accept="image/*" capture="environment" onchange="handlePlateImageSelection('entry', this)">
-<div id="scanStatusEntry" class="scan-status mt-2"></div>
-<small class="text-muted d-block mt-2"><i class="bi bi-info-circle"></i> Aponte para a placa ou use uma foto mais próxima quando a câmera ao vivo falhar.</small>
-</div>
-</div>
-</div>
-<div class="col-lg-7">
+<div class="col-12">
 <form id="entryForm">
 <div class="row g-3">
 <div class="col-12">
@@ -2396,6 +2385,14 @@ Nenhum veículo com mais de 24h no pátio neste momento.
 <option value="Veículo Visitante">Veículo Visitante</option>
 <option value="Veículo Diretoria">Veículo Diretoria</option>
 </select>
+</div>
+<div class="col-md-6">
+<label class="form-label">Marca</label>
+<input type="text" class="form-control" id="editBrand" placeholder="Ex.: M.BENZ">
+</div>
+<div class="col-md-6">
+<label class="form-label">Modelo</label>
+<input type="text" class="form-control" id="editModel" placeholder="Ex.: AXOR 2038S">
 </div>
 <div class="col-md-4">
 <label class="form-label">Pátio</label>
@@ -5882,8 +5879,9 @@ if (currentCameraMode === mode) {
 currentCameraMode = null;
 }
 const statusId = mode === 'entry' ? 'scanStatusEntry' : 'scanStatusExit';
+const statusDiv = document.getElementById(statusId);
 if (!preserveStatus) {
-document.getElementById(statusId).innerHTML = '<i class="bi bi-camera-video-off"></i> Câmera desligada';
+if (statusDiv) statusDiv.innerHTML = '<i class="bi bi-camera-video-off"></i> Câmera desligada';
 }
 const container = video?.parentElement;
 if (container) {
@@ -6645,6 +6643,7 @@ return `
 ${renderPlaca(vehicle.plate)}
 <div class="d-flex flex-wrap gap-2 mt-3">
 ${renderVehicleTypeBadge(vehicle.type)}
+${vehicle.brand || vehicle.model ? `<span class="status-badge bg-light text-dark">${escapeHtml([vehicle.brand, vehicle.model].filter(Boolean).join(' / '))}</span>` : ''}
 <span class="status-badge ${statusClass}">${formatVehicleReportValue(vehicle.status)}</span>
 <span class="sascar-badge ${sascarClass}">${sascarLabel}</span>
 ${renderVehicleWorkflowBadges(vehicle)}
@@ -6666,6 +6665,8 @@ ${operationalFlags ? `<div class="d-flex flex-wrap gap-2 mt-3">${operationalFlag
 <div class="card-body">
 <div class="row g-3">
 ${renderVehicleReportMeta('Placa', renderPlaca(vehicle.plate))}
+${renderVehicleReportMeta('Marca', formatVehicleReportValue(vehicle.brand))}
+${renderVehicleReportMeta('Modelo', formatVehicleReportValue(vehicle.model))}
 ${renderVehicleReportMeta('Chassi', formatVehicleReportValue(vehicle.chassis))}
 ${renderVehicleReportMeta('Gestor da base', formatVehicleReportValue(vehicle.manager))}
 ${renderVehicleReportMeta('Chaves com', formatVehicleReportValue(vehicle.keys))}
@@ -6925,6 +6926,19 @@ return;
 }
 }
 
+function refreshSearchPlateSuggestions() {
+const datalist = document.getElementById('searchPlateSuggestions');
+if (!datalist) return;
+const values = new Set();
+allVehicles.forEach(vehicle => {
+const plate = String(vehicle.plate || '').trim().toUpperCase();
+const chassis = String(vehicle.chassis || '').trim().toUpperCase();
+if (plate) values.add(plate);
+if (chassis) values.add(chassis);
+});
+datalist.innerHTML = Array.from(values).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
+}
+
 async function loadVehicles() {
 try {
 const res = await fetch(`${API_URL}/vehicles`, { cache: 'no-store' });
@@ -6938,6 +6952,7 @@ throw new Error((vehicles && vehicles.error) || `Resposta inválida ao carregar 
 }
 vehicles = vehicles.filter(vehicle => vehicle && typeof vehicle === 'object');
 allVehicles = vehicles;
+refreshSearchPlateSuggestions();
 
 vehicles.sort((a, b) => {
 if (a.status === 'Liberado' && b.status !== 'Liberado') return 1;
@@ -7065,6 +7080,14 @@ const allDropdowns = document.querySelectorAll('.actions-dropdown-menu');
 allDropdowns.forEach(d => {
 if (d !== dropdown) d.classList.remove('show');
 });
+const wrapper = button.closest('.actions-dropdown');
+if (wrapper) {
+const rect = button.getBoundingClientRect();
+const tableViewport = button.closest('.table-responsive');
+const viewportBottom = tableViewport ? tableViewport.getBoundingClientRect().bottom : window.innerHeight;
+const availableBottom = Math.min(window.innerHeight, viewportBottom);
+wrapper.classList.toggle('dropup', rect.bottom + 260 > availableBottom);
+}
 dropdown.classList.toggle('show');
 if (event) event.stopPropagation();
 }
@@ -7427,6 +7450,8 @@ resetAccidentPhotoFields('edit');
 document.getElementById('editVehicleId').value = v.id;
 document.getElementById('editPlate').value = v.plate;
 document.getElementById('editType').value = v.type;
+document.getElementById('editBrand').value = v.brand || '';
+document.getElementById('editModel').value = v.model || '';
 document.getElementById('editYard').value = v.yard;
 setBaseSelectValue('editBase', v.base || '', 'Jaraguá-SP (Nacional)');
 setBaseSelectValue('editBaseDestino', v.baseDestino || '', '');
@@ -7560,6 +7585,8 @@ const hasAccident = document.getElementById('editHasAccident').checked;
 const updates = {
 plate: document.getElementById('editPlate').value.toUpperCase(),
 type: document.getElementById('editType').value,
+brand: document.getElementById('editBrand').value.trim(),
+model: document.getElementById('editModel').value.trim(),
 yard: document.getElementById('editYard').value,
 base: document.getElementById('editBase').value,
 baseDestino: document.getElementById('editBaseDestino').value,
