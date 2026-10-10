@@ -608,6 +608,12 @@ bottom: 100%;
 margin-top: 0;
 margin-bottom: 4px;
 }
+.actions-dropdown-menu.viewport-menu {
+position: fixed !important;
+bottom: auto !important;
+margin: 0 !important;
+z-index: 2000;
+}
 .actions-dropdown-menu .dropdown-item {
 padding: 8px 12px;
 display: flex;
@@ -7078,22 +7084,40 @@ function toggleActionsDropdown(button, event) {
 const dropdown = button.nextElementSibling;
 const allDropdowns = document.querySelectorAll('.actions-dropdown-menu');
 allDropdowns.forEach(d => {
-if (d !== dropdown) d.classList.remove('show');
+if (d !== dropdown) {
+d.classList.remove('show');
+d.classList.remove('viewport-menu');
+d.style.removeProperty('top');
+d.style.removeProperty('left');
+d.style.removeProperty('right');
+}
 });
 const wrapper = button.closest('.actions-dropdown');
-if (wrapper) {
+dropdown.classList.toggle('show');
+if (dropdown.classList.contains('show')) {
 const rect = button.getBoundingClientRect();
 const tableViewport = button.closest('.table-responsive');
 const viewportBottom = tableViewport ? tableViewport.getBoundingClientRect().bottom : window.innerHeight;
 const availableBottom = Math.min(window.innerHeight, viewportBottom);
-wrapper.classList.toggle('dropup', rect.bottom + 260 > availableBottom);
+const opensUp = rect.bottom + 260 > availableBottom;
+if (wrapper) wrapper.classList.toggle('dropup', opensUp);
+dropdown.classList.add('viewport-menu');
+const menuHeight = dropdown.offsetHeight || 260;
+const top = opensUp ? Math.max(8, rect.top - menuHeight - 4) : Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 4);
+dropdown.style.top = `${top}px`;
+dropdown.style.left = `${Math.max(8, Math.min(window.innerWidth - dropdown.offsetWidth - 8, rect.right - dropdown.offsetWidth))}px`;
+dropdown.style.right = 'auto';
 }
-dropdown.classList.toggle('show');
 if (event) event.stopPropagation();
 }
 
 document.addEventListener('click', () => {
-document.querySelectorAll('.actions-dropdown-menu').forEach(d => d.classList.remove('show'));
+document.querySelectorAll('.actions-dropdown-menu').forEach(d => {
+d.classList.remove('show', 'viewport-menu');
+d.style.removeProperty('top');
+d.style.removeProperty('left');
+d.style.removeProperty('right');
+});
 });
 
 async function loadSwaps({ suppressInitialAlert = false } = {}) {
